@@ -1,0 +1,162 @@
+/* * {
+    margin: 0;
+    box-sizing: border-box;
+}
+
+.body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    background-color: #151515;
+}
+
+.header {
+    flex: 1;
+    background-color: #252525;
+}
+
+.wrapper {
+    flex: 10;
+    display: flex;
+    flex-direction: row;
+}
+
+.navigation {
+    width: 100px;
+    margin: 2vh;
+    border-radius: 18px;
+    background-color: #252525;
+    order: 1;
+}
+
+.main {
+    display: flex;
+    flex: 1;
+    order: 3;
+    aspect-ratio: 16/9;
+}
+
+.player {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    background-color: #161616;
+}
+
+.slide {
+    flex: 1;
+    background-color: #000;
+}
+
+.options {
+    min-height: 3vw;
+    margin: 1% 3%;
+    border-radius: 18px;
+    background-color: #252525;
+}
+
+.extra {
+    width: 300px;
+    background-color: rgb(36, 36, 36);
+    margin: 1vw;
+    border-radius: 18px;
+    order: 2;
+}
+
+
+@media screen and (max-width: 768px) {
+    .wrapper {
+        flex-direction: column;
+    }
+
+    .navigation {
+        width: auto;
+        height: 60px;
+        margin: 2vw;
+        order: 1;
+    }
+
+    .extra {
+        width: auto;
+        height: 80px;
+        margin: 2vw;
+        background-color: #100; 
+        order: 2;
+    }
+
+    .main {
+        flex-direction: column;
+        order: 3;
+        margin: 0 2vw 2vw 2vw;
+        border-radius: 18px;
+        overflow: hidden;
+    }
+
+    .options {
+        min-height: 35px;
+        margin: 3% 5%;
+    }
+}
+
+ */
+/* 
+* {
+    margin: 0;
+    box-sizing: border-box;
+}
+
+ .wrapper {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background-color: #151515;
+ }
+
+ .header {
+    width: 100%;
+    min-height: 80px;
+    background-color: #252525;
+ }
+ .main {
+    flex: 1;
+    display: flex;
+ }
+ .content {
+    display: flex;
+    flex: 1;
+ }
+ .player {
+    flex: 2;
+    display: flex;
+  flex-direction: column;
+ }
+ .slide {
+  flex: 1;
+  aspect-ratio: 16 / 9; 
+    background-color: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+ }
+ .master-control-bar {
+    height: 60px;
+    background-color: #333;
+    margin: 10px;
+    border-radius: 18px;
+ }
+ .viewer-control-bar {
+    height: 60px;
+    background-color: #333;
+    margin: 10px;
+    border-radius: 18px;
+ }
+ .extra {
+    width: 27%;
+ }
+ .navigation {
+    width: min(84px,9%);
+    height: 640px;
+    margin: auto 10px;
+    border-radius: 18px;
+    background-color: #333;
+ } */

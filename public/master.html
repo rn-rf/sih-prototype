@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Master Classroom</title>
+<style>
+body { font-family:sans-serif; margin:0; padding:0; }
+.player { position:relative; width:100%; max-width:900px; margin:auto; }
+.slide { width:100%; border:1px solid #ccc; min-height:500px; position:relative; }
+canvas { position:absolute; top:0; left:0; pointer-events:none; }
+.master-control-bar { display:flex; justify-content:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
+.master-control-bar button { padding:10px 20px; }
+#responsesLog { margin:10px auto; max-width:900px; border-top:1px solid #ccc; padding-top:10px; }
+</style>
+</head>
+<body>
+
+<h1>Master Classroom</h1>
+<p>Room Code: <span id="roomCode">Loading...</span></p>
+<p>Viewers: <span id="viewerCount">0</span> | Slides: <span id="slideCount">0</span></p>
+
+<div class="player">
+  <div class="slide" id="slideContainer">
+    <canvas id="doodleCanvas"></canvas>
+    <img id="currentSlide" src="" alt="Slide" style="width:100%; display:block;">
+  </div>
+
+  <div class="master-control-bar">
+    <button id="uploadBtn">Upload PPT</button>
+    <input type="file" id="pptUpload" accept=".pdf,.ppt,.pptx" style="display:none">
+    <button id="prevSlide">Prev Slide</button>
+    <button id="nextSlide">Next Slide</button>
+    <button id="toggleDoodle">Doodle</button>
+    <button id="clearDoodle">Clear Doodle</button>
+    <button id="micToggle">Mic</button>
+    <button id="closeRoom">Close Room</button>
+  </div>
+</div>
+
+<div id="responsesLog"><strong>Viewer Responses:</strong></div>
+<audio id="remoteAudio" autoplay playsinline></audio>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const urlParams = new URLSearchParams(window.location.search);
+const roomCode = urlParams.get('code');
+document.getElementById('roomCode').innerText = roomCode;
+
+const socket = io();
+socket.emit('join-room',{ code: roomCode, role:'master' });
+
+socket.on('room-joined', ({ viewerCount }) => {
+  document.getElementById('viewerCount').innerText = viewerCount || 0;
+});
+
+socket.on('viewer-joined', ({ viewerCount }) => {
+  document.getElementById('viewerCount').innerText = viewerCount;
+});
+
+socket.on('viewer-left', ({ viewerCount }) => {
+  document.getElementById('viewerCount').innerText = viewerCount;
+});
+
+// ---------------- Slides -----------------
+let slides = [], currentIndex=0;
+const slideImg = document.getElementById('currentSlide');
+
+document.getElementById('uploadBtn').addEventListener('click',()=>document.getElementById('pptUpload').click());
+document.getElementById('pptUpload').addEventListener('change',async e=>{
+  const file=e.target.files[0];
+  if(!file) return;
+  const formData = new FormData();
+  formData.append('ppt',file);
+  formData.append('code',roomCode);
+  const res = await fetch('/upload-ppt',{ method:'POST', body:formData });
+  const data = await res.json();
+  slides = data.slides;
+  document.getElementById('slideCount').innerText = slides.length;
+  if(!slides.length) return;
+  currentIndex=0;
+  slideImg.src=slides[currentIndex];
+  socket.emit('slide-update',{ code:roomCode, src:slides[currentIndex], index:currentIndex });
+});
+
+document.getElementById('nextSlide').addEventListener('click',()=>{
+  if(!slides.length) return;
+  currentIndex=(currentIndex+1)%slides.length;
+  slideImg.src=slides[currentIndex];
+  socket.emit('slide-update',{ code:roomCode, src:slides[currentIndex], index:currentIndex });
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+});
+
+document.getElementById('prevSlide').addEventListener('click',()=>{
+  if(!slides.length) return;
+  currentIndex=(currentIndex-1+slides.length)%slides.length;
+  slideImg.src=slides[currentIndex];
+  socket.emit('slide-update',{ code:roomCode, src:slides[currentIndex], index:currentIndex });
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+});
+
+// ---------------- Doodle -----------------
+const canvas = document.getElementById('doodleCanvas');
+const ctx = canvas.getContext('2d');
+let drawing=false, doodleEnabled=false;
+function resizeCanvas(){ canvas.width=slideImg.clientWidth; canvas.height=slideImg.clientHeight; }
+window.addEventListener('resize',resizeCanvas);
+slideImg.addEventListener('load',resizeCanvas);
+resizeCanvas();
+
+document.getElementById('toggleDoodle').addEventListener('click',()=>{
+  doodleEnabled=!doodleEnabled;
+  canvas.style.pointerEvents=doodleEnabled?'auto':'none';
+  document.getElementById('toggleDoodle').innerText=doodleEnabled?'Doodle ON':'Doodle';
+});
+
+document.getElementById('clearDoodle').addEventListener('click',()=>{
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  socket.emit('clear-doodles',{ code:roomCode });
+});
+
+canvas.addEventListener('mousedown',e=>{ if(doodleEnabled)drawing=true; });
+canvas.addEventListener('mouseup',()=>{ drawing=false; ctx.beginPath(); });
+canvas.addEventListener('mousemove',e=>{
+  if(!drawing) return;
+  const rect=canvas.getBoundingClientRect();
+  const x=e.clientX-rect.left;
+  const y=e.clientY-rect.top;
+  ctx.lineWidth=2; ctx.strokeStyle='red'; ctx.lineCap='round';
+  ctx.lineTo(x,y); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x,y);
+  socket.emit('doodle',{ code:roomCode, x, y });
+});
+
+// ---------------- Responses -----------------
+socket.on('response',({ from, nickname, response, timestamp })=>{
+  const logDiv = document.getElementById('responsesLog');
+  if(logDiv) logDiv.innerHTML += `<div>${nickname}: ${response}</div>`;
+});
+
+// ---------------- Room close -----------------
+document.getElementById('closeRoom').addEventListener('click',()=>{
+  socket.emit('close-room',{ code:roomCode });
+  window.location.href='/';
+});
+socket.on('room-closed',()=>{ alert('Room closed'); window.location.href='/'; });
+
+// ---------------- WebRTC Audio -----------------
+let peerConnections = new Map();
+let localStream, micEnabled=false;
+
+socket.on('webrtc-offer', async ({ offer, from })=>{
+  try {
+    console.log("Master got offer from viewer "+from);
+    
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+    
+    peerConnections.set(from, pc);
+    
+    pc.onconnectionstatechange=()=>console.log("Connection to "+from+": "+pc.connectionState);
+    pc.ontrack=e=>{
+      console.log('Received viewer audio track from '+from);
+      document.getElementById('remoteAudio').srcObject=e.streams[0];
+    };
+    pc.onicecandidate=e=>{ 
+      if(e.candidate) socket.emit('webrtc-candidate',{ code:roomCode, candidate:e.candidate, to:from }); 
+    };
+    
+    // Always add a track (silent or real)
+    if(localStream){
+      localStream.getTracks().forEach(track=>pc.addTrack(track,localStream));
+    } else {
+      // Add silent track
+      const audioContext = new AudioContext();
+      const destination = audioContext.createMediaStreamDestination();
+      const silentStream = destination.stream;
+      silentStream.getTracks().forEach(track=>pc.addTrack(track,silentStream));
+    }
+    
+    await pc.setRemoteDescription(offer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('webrtc-answer',{ code:roomCode, answer, to:from });
+    console.log("Master sent answer to "+from);
+  } catch(error) {
+    console.error('Error handling offer:', error);
+  }
+});
+
+socket.on('webrtc-candidate',async ({ candidate, from })=>{
+  const pc = peerConnections.get(from);
+  if(pc) await pc.addIceCandidate(candidate).catch(console.error);
+});
+
+// Master mic toggle
+document.getElementById('micToggle').addEventListener('click', async ()=>{
+  if(!micEnabled){
+    try {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+      localStream.getTracks().forEach(t=>t.enabled=true);
+      
+      // Replace silent tracks with real mic for all connections
+      peerConnections.forEach((pc)=>{
+        const senders = pc.getSenders();
+        const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+        if(audioSender && localStream.getAudioTracks()[0]) {
+          audioSender.replaceTrack(localStream.getAudioTracks()[0]);
+        } else {
+          localStream.getTracks().forEach(track=>pc.addTrack(track,localStream));
+        }
+      });
+      
+      micEnabled=true;
+      document.getElementById('micToggle').innerText='Mic On';
+      console.log("Master mic enabled");
+    } catch(err) {
+      alert('Could not access microphone');
+      console.error(err);
+    }
+  } else {
+    if(localStream) {
+      localStream.getTracks().forEach(t=>t.stop());
+      
+      // Replace with silent track
+      const audioContext = new AudioContext();
+      const destination = audioContext.createMediaStreamDestination();
+      const silentStream = destination.stream;
+      
+      peerConnections.forEach((pc)=>{
+        const senders = pc.getSenders();
+        const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+        if(audioSender && silentStream.getAudioTracks()[0]) {
+          audioSender.replaceTrack(silentStream.getAudioTracks()[0]);
+        }
+      });
+      
+      localStream=null;
+    }
+    micEnabled=false;
+    document.getElementById('micToggle').innerText='Mic';
+    console.log("Master mic disabled");
+  }
+});
+</script>
+</body>
+</html>

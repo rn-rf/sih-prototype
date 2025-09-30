@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delink</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body class="body">
+    <!-- <h1>Delink</h1>
+
+    <button hx-get="/hello" hx-target="#result" hx-swap="outerHTML">
+        Load Hello
+    </button>
+
+    <div id="result">Click the button above 👆</div> -->
+
+    <!-- <div class="wrapper">
+        <div class="header">asdf</div>
+        <div class="main">
+            <div class="navigation"></div>
+            <div class="content">
+                <div class="player">
+                    <div class="slide"></div>
+                    <div class="master-control-bar"></div>
+                </div>
+                <div class="extra"></div>
+            </div>
+        </div>
+    </div> -->
+
+    <div class="player">
+    <div class="slide"></div>
+    <div class="master-control-bar">
+        <button>Next Slide</button>
+        <button>Prev Slide</button>
+    </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        socket.emit("join-room", { code: "ROOMCODE", role: "master" });
+    </script>
+    <script src="script.js"></script>
+</body>
+</html>
